@@ -440,8 +440,51 @@ export class Parser {
           }
           return deserializer(subTable);
         };
-      } else {
-        throw new Error("Arrays are not supported in field " + field.name());
+      } else if (baseType === reflection.BaseType.Array) {
+        if (!schema.isStruct()) {
+          throw new Error("Arrays are only supported inside structs, not tables");
+        }
+        const arrayLength = fieldType.fixedLength();
+        const elementType = fieldType.element();
+        const fieldTypeIndex = fieldType.index();
+        const fieldOffset = field.offset();
+        if (isScalar(elementType)) {
+          const elementSize = typeSize(elementType);
+          lambdas[fieldName] = (t: Table) => {
+            if (!t.isStruct) {
+              throw new Error("Arrays are only supported inside structs, not tables");
+            }
+            const result = new Array<unknown>(arrayLength);
+            let offset = t.offset + fieldOffset;
+            for (let i = 0; i < arrayLength; i++) {
+              result[i] = t.readScalar(elementType, offset);
+              offset += elementSize;
+            }
+            return result;
+          };
+        } else if (elementType === reflection.BaseType.Obj) {
+          const elementSchema = this.getType(fieldTypeIndex);
+          if (!elementSchema.isStruct()) {
+            throw new Error("Arrays may only contain structs, not tables");
+          }
+          const elementSize = elementSchema.bytesize();
+          const subTableLambda = this.toObjectLambda(fieldTypeIndex, readDefaults);
+          lambdas[fieldName] = (t: Table) => {
+            if (!t.isStruct) {
+              throw new Error("Arrays are only supported inside structs, not tables");
+            }
+            const result = new Array<unknown>(arrayLength);
+            let offset = t.offset + fieldOffset;
+            for (let i = 0; i < arrayLength; i++) {
+              const subTable = new Table(t.bb, fieldTypeIndex, offset, true);
+              result[i] = subTableLambda(subTable);
+              offset += elementSize;
+            }
+            return result;
+          };
+        } else {
+          throw new Error("Arrays may contain only scalar or struct fields");
+        }
       }
     }
     return (t: Table) => {
