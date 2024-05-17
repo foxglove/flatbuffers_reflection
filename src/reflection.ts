@@ -314,67 +314,11 @@ export class Parser {
             throw new Error(`Malformed schema: union discriminator field is not a vector`);
           }
 
-          // This will deserialize the vector of discriminator values
-          const readDiscriminators = this.readVectorOfScalarsLambda(unionDiscriminator);
-
-          // This will read the vector of tables from the actual field
-          // How to deserialize each table will depend on the discriminator value at the same vector
-          // index position in the discriminator values field
-          const vectorLambda = this.readVectorOfTablesLambda(field);
-
-          const unionDeserializers = this.createUnionDeserializers(fieldType, readDefaults);
-
-          lambdas[fieldName] = (table: Table) => {
-            const res = readDiscriminators(table);
-            if (!res) {
-              throw new Error(
-                `Malformed message: missing vector discriminators field: ${unionDiscriminator.name()}`,
-              );
-            }
-
-            const vector = vectorLambda(table);
-            if (vector == null) {
-              throw new Error(`Malformed message: missing vector table for field: ${field.name()}`);
-            }
-
-            if (res.length !== vector.length) {
-              throw new Error(
-                `malformed message: ${field.name()} length != ${unionDiscriminator.name()} length`,
-              );
-            }
-
-            const result = [];
-            for (let idx = 0; idx < vector.length; ++idx) {
-              const discriminator = res[idx];
-              if (typeof discriminator !== "number") {
-                throw new Error(
-                  `Malformed union discriminator value is not a number in field: ${unionDiscriminator.name()}`,
-                );
-              }
-
-              // Skip NONE
-              if (discriminator < 0) {
-                continue;
-              }
-
-              const deserializer = unionDeserializers.get(discriminator);
-              if (!deserializer) {
-                throw new Error(
-                  `Malformed message: unknown union type '${discriminator}' in field ${unionDiscriminator.name()}`,
-                );
-              }
-
-              const subTable = vector[idx];
-              if (!subTable) {
-                throw new Error(
-                  `Malformed message missing table at ${field.name()} positon ${idx}`,
-                );
-              }
-              result.push(deserializer(subTable));
-            }
-
-            return result;
-          };
+          lambdas[fieldName] = this.readVectorOfUnionLambda(
+            field,
+            unionDiscriminator,
+            readDefaults,
+          );
         } else {
           throw new Error("Vectors of Arrays are not supported.");
         }
@@ -392,54 +336,7 @@ export class Parser {
           throw new Error(`Missing union discriminator field for field '${field.name()}'`);
         }
 
-        const discriminatorfieldType = unionDiscriminator.type();
-        if (discriminatorfieldType === null) {
-          throw new Error('Malformed schema: "type" field of Field not populated.');
-        }
-
-        if (!isScalar(discriminatorfieldType.baseType())) {
-          throw new Error(`Malformed schema: union discriminator field is not a scalar`);
-        }
-
-        const parseDiscriminator = this.readScalarLambda(
-          unionDiscriminator,
-          discriminatorfieldType.index(),
-          readDefaults,
-        );
-
-        const unionDeserializers = this.createUnionDeserializers(fieldType, readDefaults);
-
-        // Unions can only be formed from tables so we know our union field will point to a table
-        const rawLambda = this.readTableLambda(field, typeIndex);
-
-        lambdas[fieldName] = (table: Table) => {
-          const discriminatorValue = parseDiscriminator(table);
-          // NONE becomes undefined when parsed
-          if (discriminatorValue == undefined) {
-            return undefined;
-          }
-          if (typeof discriminatorValue !== "number") {
-            throw new Error(`Malformed union discriminator value is not a number`);
-          }
-
-          // Skip NONE
-          if (discriminatorValue < 0) {
-            return undefined;
-          }
-
-          const deserializer = unionDeserializers.get(discriminatorValue);
-          if (!deserializer) {
-            throw new Error(
-              `Malformed message: could not find union type: '${discriminatorValue}'`,
-            );
-          }
-
-          const subTable = rawLambda(table);
-          if (!subTable) {
-            throw new Error(`Malformed message: missing union field table: '${fieldName}'`);
-          }
-          return deserializer(subTable);
-        };
+        lambdas[fieldName] = this.readUnionLambda(field, unionDiscriminator, readDefaults);
       } else if (baseType === reflection.BaseType.Array) {
         if (!schema.isStruct()) {
           throw new Error("Arrays are only supported inside structs, not tables");
@@ -834,6 +731,135 @@ export class Parser {
         offset += elementSize;
       }
       return result;
+    };
+  }
+
+  readVectorOfUnionLambda(
+    field: reflection.Field,
+    discriminatorField: reflection.Field,
+    readDefaults: boolean,
+  ): (table: Table) => Record<string, any>[] {
+    const fieldType = field.type();
+    if (fieldType === null) {
+      throw new Error(`Malformed schema: "type" field of '${field.name()}' not populated.`);
+    }
+
+    // This will deserialize the vector of discriminator values
+    const readDiscriminators = this.readVectorOfScalarsLambda(discriminatorField);
+
+    // This will read the vector of tables from the actual field
+    // How to deserialize each table will depend on the discriminator value at the same vector
+    // index position in the discriminator values field
+    const vectorLambda = this.readVectorOfTablesLambda(field);
+
+    const unionDeserializers = this.createUnionDeserializers(fieldType, readDefaults);
+
+    return (table: Table) => {
+      const res = readDiscriminators(table);
+      if (!res) {
+        throw new Error(
+          `Malformed message: missing vector discriminators field: ${discriminatorField.name()}`,
+        );
+      }
+
+      const vector = vectorLambda(table);
+      if (vector == null) {
+        throw new Error(`Malformed message: missing vector table for field: ${field.name()}`);
+      }
+
+      if (res.length !== vector.length) {
+        throw new Error(
+          `malformed message: ${field.name()} length != ${discriminatorField.name()} length`,
+        );
+      }
+
+      const result = [];
+      for (let idx = 0; idx < vector.length; ++idx) {
+        const discriminator = res[idx];
+        if (typeof discriminator !== "number") {
+          throw new Error(
+            `Malformed union discriminator value is not a number in field: ${discriminatorField.name()}`,
+          );
+        }
+
+        // Skip NONE
+        if (discriminator < 0) {
+          continue;
+        }
+
+        const deserializer = unionDeserializers.get(discriminator);
+        if (!deserializer) {
+          throw new Error(
+            `Malformed message: unknown union type '${discriminator}' in field ${discriminatorField.name()}`,
+          );
+        }
+
+        const subTable = vector[idx];
+        if (!subTable) {
+          throw new Error(`Malformed message missing table at ${field.name()} positon ${idx}`);
+        }
+        result.push(deserializer(subTable));
+      }
+
+      return result;
+    };
+  }
+
+  readUnionLambda(
+    field: reflection.Field,
+    discriminatorField: reflection.Field,
+    readDefaults: boolean,
+  ): (table: Table) => Record<string, any> | undefined {
+    const fieldType = field.type();
+    if (fieldType == null) {
+      throw new Error(`Malformed schema: "type" field of '${field.name()}' not populated.`);
+    }
+
+    const discriminatorfieldType = discriminatorField.type();
+    if (discriminatorfieldType === null) {
+      throw new Error('Malformed schema: "type" field of Field not populated.');
+    }
+
+    if (!isScalar(discriminatorfieldType.baseType())) {
+      throw new Error(`Malformed schema: union discriminator field is not a scalar`);
+    }
+
+    const parseDiscriminator = this.readScalarLambda(
+      discriminatorField,
+      discriminatorfieldType.index(),
+      readDefaults,
+    );
+
+    const unionDeserializers = this.createUnionDeserializers(fieldType, readDefaults);
+
+    // Unions can only be formed from tables so we know our union field will point to a table
+    const rawLambda = this.readTableLambda(field, fieldType.index());
+
+    return (table: Table) => {
+      const discriminatorValue = parseDiscriminator(table);
+      // NONE becomes undefined when parsed
+      if (discriminatorValue == undefined) {
+        return undefined;
+      }
+      if (typeof discriminatorValue !== "number") {
+        throw new Error(`Malformed union discriminator value is not a number`);
+      }
+
+      // Skip NONE
+      if (discriminatorValue < 0) {
+        return undefined;
+      }
+
+      const deserializer = unionDeserializers.get(discriminatorValue);
+      if (!deserializer) {
+        throw new Error(`Malformed message: could not find union type: '${discriminatorValue}'`);
+      }
+
+      const subTable = rawLambda(table);
+      if (!subTable) {
+        throw new Error(`Malformed message: missing union field table: '${field.name()}'`);
+      }
+      return deserializer(subTable);
     };
   }
 
