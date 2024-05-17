@@ -297,24 +297,15 @@ export class Parser {
           };
         } else if (elementType === reflection.BaseType.Union) {
           // Similar to how a union is serialized in a table, a vector of union gets a sidecar field
-          // that is an array of discriminator values. This sidecar field follows the union field
-          // So we increment our index and build a deserializer for this field
+          // that is an array of discriminator values. This sidecar field is named as the union field
+          // with _type suffix
+          //
+          // https://flatbuffers.dev/md__schemas.html
 
-          const next = ii + 1;
-          if (next >= numFields) {
-            throw new Error(`Missing union discriminator field for field '${field.name()}'`);
-          }
+          const discriminatorFieldName = `${fieldName}_type`;
+          const unionDiscriminator = this.getField(discriminatorFieldName, typeIndex);
 
-          const unionDiscriminator = schema.fields(next);
-          if (!unionDiscriminator) {
-            throw new Error(`Missing union discriminator field for field '${field.name()}'`);
-          }
-
-          if (unionDiscriminator.type()?.baseType() !== reflection.BaseType.Vector) {
-            throw new Error(`Malformed schema: union discriminator field is not a vector`);
-          }
-
-          lambdas[fieldName] = this.readVectorOfUnionLambda(
+          lambdas[fieldName] = this.readVectorOfUnionsLambda(
             field,
             unionDiscriminator,
             readDefaults,
@@ -323,18 +314,13 @@ export class Parser {
           throw new Error("Vectors of Arrays are not supported.");
         }
       } else if (baseType === reflection.BaseType.Union) {
-        // A a union gets a sidecar field that is the discriminator value. This sidecar field
-        // follows the union field. We increment our index and build a deserializer for this field.
+        // A union gets a sidecar field that is the discriminator value. This sidecar field is named
+        // as the union field with _type suffix.
+        //
+        // https://flatbuffers.dev/md__schemas.html
 
-        const next = ii + 1;
-        if (next >= numFields) {
-          throw new Error(`Missing union discriminator field for field '${field.name()}'`);
-        }
-
-        const unionDiscriminator = schema.fields(next);
-        if (!unionDiscriminator) {
-          throw new Error(`Missing union discriminator field for field '${field.name()}'`);
-        }
+        const discriminatorFieldName = `${fieldName}_type`;
+        const unionDiscriminator = this.getField(discriminatorFieldName, typeIndex);
 
         lambdas[fieldName] = this.readUnionLambda(field, unionDiscriminator, readDefaults);
       } else if (baseType === reflection.BaseType.Array) {
@@ -524,7 +510,7 @@ export class Parser {
       fieldType.baseType() !== reflection.BaseType.Obj &&
       fieldType.baseType() !== reflection.BaseType.Union
     ) {
-      throw new Error("Field " + field.name() + " is not an object type.");
+      throw new Error("Field " + field.name() + " is not an object or union type.");
     }
 
     const elementIsStruct = this.getType(fieldType.index()).isStruct();
@@ -567,7 +553,7 @@ export class Parser {
     }
     const elementType = fieldType.element();
     if (!isScalar(elementType)) {
-      throw new Error("Field " + field.name() + " is not an vector of scalars.");
+      throw new Error("Field " + field.name() + " is not a vector of scalars.");
     }
     const isUByteVector = elementType === reflection.BaseType.UByte;
 
@@ -615,7 +601,7 @@ export class Parser {
       fieldType.element() !== reflection.BaseType.Obj &&
       fieldType.element() !== reflection.BaseType.Union
     ) {
-      throw new Error("Field " + field.name() + " is not an vector of objects.");
+      throw new Error("Field " + field.name() + " is not a vector of objects or unions.");
     }
 
     const elementSchema = this.getType(fieldType.index());
@@ -734,7 +720,7 @@ export class Parser {
     };
   }
 
-  readVectorOfUnionLambda(
+  readVectorOfUnionsLambda(
     field: reflection.Field,
     discriminatorField: reflection.Field,
     readDefaults: boolean,
@@ -742,6 +728,10 @@ export class Parser {
     const fieldType = field.type();
     if (fieldType === null) {
       throw new Error(`Malformed schema: "type" field of '${field.name()}' not populated.`);
+    }
+
+    if (discriminatorField.type()?.baseType() !== reflection.BaseType.Vector) {
+      throw new Error(`Malformed schema: union discriminator field is not a vector`);
     }
 
     // This will deserialize the vector of discriminator values
@@ -755,27 +745,27 @@ export class Parser {
     const unionDeserializers = this.createUnionDeserializers(fieldType, readDefaults);
 
     return (table: Table) => {
-      const res = readDiscriminators(table);
-      if (!res) {
+      const discriminators = readDiscriminators(table);
+      if (!discriminators) {
         throw new Error(
           `Malformed message: missing vector discriminators field: ${discriminatorField.name()}`,
         );
       }
 
-      const vector = vectorLambda(table);
-      if (vector == null) {
+      const tables = vectorLambda(table);
+      if (tables == null) {
         throw new Error(`Malformed message: missing vector table for field: ${field.name()}`);
       }
 
-      if (res.length !== vector.length) {
+      if (discriminators.length !== tables.length) {
         throw new Error(
           `malformed message: ${field.name()} length != ${discriminatorField.name()} length`,
         );
       }
 
       const result = [];
-      for (let idx = 0; idx < vector.length; ++idx) {
-        const discriminator = res[idx];
+      for (let idx = 0; idx < tables.length; ++idx) {
+        const discriminator = discriminators[idx];
         if (typeof discriminator !== "number") {
           throw new Error(
             `Malformed union discriminator value is not a number in field: ${discriminatorField.name()}`,
@@ -794,7 +784,7 @@ export class Parser {
           );
         }
 
-        const subTable = vector[idx];
+        const subTable = tables[idx];
         if (!subTable) {
           throw new Error(`Malformed message missing table at ${field.name()} positon ${idx}`);
         }
