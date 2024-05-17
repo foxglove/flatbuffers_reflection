@@ -1,9 +1,17 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Builder, ByteBuffer } from "flatbuffers";
-import { Parser, Table } from "./reflection";
-import { BaseType, EnumVal, Field, Schema, Type } from "./vendor/gen/reflection";
-import { ByteVector, NestedStruct } from "./test/gen/ByteVector";
 import { readFileSync } from "fs";
+
+import { Parser, Table } from "./reflection";
+import { ByteVector, NestedStruct } from "./test/gen/ByteVector";
+import { ArmsT } from "./test/gen/arms";
+import { Equipment } from "./test/gen/equipment";
+import { GemstoneT } from "./test/gen/gemstone";
+import { Monster, MonsterT } from "./test/gen/monster";
+import { ShieldT } from "./test/gen/shield";
+import { ShieldDecorator } from "./test/gen/shield-decorator";
+import { SkullT } from "./test/gen/skull";
+import { BaseType, EnumVal, Field, Schema, Type } from "./vendor/gen/reflection";
 
 describe("parseReflectionSchema", () => {
   it("Reads reflection table", () => {
@@ -102,6 +110,39 @@ describe("parseReflectionSchema", () => {
       expect(parser.readScalar(fieldTable, "padding", false)).toBe(null);
       expect(parser.readScalar(fieldTable, "padding", true)).toBe(0);
     }
+  });
+  it("supports union types", () => {
+    const schemaBuffer: Buffer = readFileSync(`${__dirname}/test/gen/Union.bfbs`);
+    const schemaByteBuffer: ByteBuffer = new ByteBuffer(schemaBuffer);
+    const schema = Schema.getRootAsSchema(schemaByteBuffer);
+
+    const monster = new MonsterT();
+
+    monster.equippedType = Equipment.Shield;
+    monster.equipped = new ShieldT();
+    monster.equipped.protection = 27.5;
+    monster.equipped.primaryDecorator = new ArmsT(12);
+    monster.equipped.primaryDecoratorType = ShieldDecorator.Arms;
+
+    monster.equipped.decorators.push(new GemstoneT(1.02337));
+    monster.equipped.decorators.push(new SkullT("some-name"));
+    monster.equipped.decoratorsType.push(ShieldDecorator.Gemstone);
+    monster.equipped.decoratorsType.push(ShieldDecorator.Skull);
+
+    const builder = new Builder();
+    Monster.finishMonsterBuffer(builder, monster.pack(builder));
+
+    const parser = new Parser(schema);
+    const table = Table.getRootTable(new ByteBuffer(builder.asUint8Array()));
+    const schemaObject = parser.toObject(table);
+
+    expect(schemaObject).toEqual({
+      equipped: {
+        protection: 27.5,
+        primary_decorator: { count: 12 },
+        decorators: [{ shine: 1.02337 }, { name: "some-name" }],
+      },
+    });
   });
   it("converts uint8 vectors to uint8arrays", () => {
     const builder = new Builder();
