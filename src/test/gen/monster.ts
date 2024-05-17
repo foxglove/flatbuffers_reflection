@@ -4,9 +4,9 @@
 
 import * as flatbuffers from 'flatbuffers';
 
-import { Equipment, unionToEquipment } from './equipment';
-import { ShieldT } from './shield';
-import { SwordT } from './sword';
+import { Equipment, unionToEquipment, unionListToEquipment } from './equipment';
+import { Shield, ShieldT } from './shield';
+import { Sword, SwordT } from './sword';
 
 
 export class Monster implements flatbuffers.IUnpackableObject<MonsterT> {
@@ -32,7 +32,7 @@ equippedType():Equipment {
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : Equipment.NONE;
 }
 
-equipped(obj:any):any|null {
+equipped<T extends flatbuffers.Table>(obj:any):any|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__union(obj, this.bb_pos + offset) : null;
 }

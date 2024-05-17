@@ -2,8 +2,8 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
-import { Shield } from './shield';
-import { Sword } from './sword';
+import { Shield, ShieldT } from './shield';
+import { Sword, SwordT } from './sword';
 
 
 export enum Equipment {

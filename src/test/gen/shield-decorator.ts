@@ -2,9 +2,9 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
-import { Arms } from './arms';
-import { Gemstone } from './gemstone';
-import { Skull } from './skull';
+import { Arms, ArmsT } from './arms';
+import { Gemstone, GemstoneT } from './gemstone';
+import { Skull, SkullT } from './skull';
 
 
 export enum ShieldDecorator {

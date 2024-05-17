@@ -4,10 +4,10 @@
 
 import * as flatbuffers from 'flatbuffers';
 
-import { ArmsT } from './arms';
-import { GemstoneT } from './gemstone';
+import { Arms, ArmsT } from './arms';
+import { Gemstone, GemstoneT } from './gemstone';
 import { ShieldDecorator, unionToShieldDecorator, unionListToShieldDecorator } from './shield-decorator';
-import { SkullT } from './skull';
+import { Skull, SkullT } from './skull';
 
 
 export class Shield implements flatbuffers.IUnpackableObject<ShieldT> {
@@ -38,7 +38,7 @@ primaryDecoratorType():ShieldDecorator {
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : ShieldDecorator.NONE;
 }
 
-primaryDecorator(obj:any):any|null {
+primaryDecorator<T extends flatbuffers.Table>(obj:any):any|null {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.__union(obj, this.bb_pos + offset) : null;
 }
