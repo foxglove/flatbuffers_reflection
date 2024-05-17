@@ -137,10 +137,13 @@ describe("parseReflectionSchema", () => {
     const schemaObject = parser.toObject(table);
 
     expect(schemaObject).toEqual({
+      equipped_type: Equipment.Shield,
       equipped: {
         protection: 27.5,
         primary_decorator: { count: 12 },
+        primary_decorator_type: ShieldDecorator.Arms,
         decorators: [{ shine: 1.02337 }, { name: "some-name" }],
+        decorators_type: [ShieldDecorator.Gemstone, ShieldDecorator.Skull],
       },
     });
   });
@@ -164,10 +167,12 @@ describe("parseReflectionSchema", () => {
     const schemaObject = parser.toObject(table);
 
     expect(schemaObject).toEqual({
+      equipped_type: Equipment.Shield,
       equipped: {
         protection: -27.5,
         primary_decorator: undefined,
         decorators: [],
+        decorators_type: [],
       },
     });
   });

@@ -300,7 +300,7 @@ export class Parser {
           // that is an array of discriminator values. This sidecar field follows the union field
           // So we increment our index and build a deserializer for this field
 
-          const next = ++ii;
+          const next = ii + 1;
           if (next >= numFields) {
             throw new Error(`Missing union discriminator field for field '${field.name()}'`);
           }
@@ -382,7 +382,7 @@ export class Parser {
         // A a union gets a sidecar field that is the discriminator value. This sidecar field
         // follows the union field. We increment our index and build a deserializer for this field.
 
-        const next = ++ii;
+        const next = ii + 1;
         if (next >= numFields) {
           throw new Error(`Missing union discriminator field for field '${field.name()}'`);
         }
