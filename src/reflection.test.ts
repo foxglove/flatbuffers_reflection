@@ -144,6 +144,33 @@ describe("parseReflectionSchema", () => {
       },
     });
   });
+  it("supports union NONE", () => {
+    const schemaBuffer: Buffer = readFileSync(`${__dirname}/test/gen/Union.bfbs`);
+    const schemaByteBuffer: ByteBuffer = new ByteBuffer(schemaBuffer);
+    const schema = Schema.getRootAsSchema(schemaByteBuffer);
+
+    const monster = new MonsterT();
+
+    monster.equippedType = Equipment.Shield;
+    monster.equipped = new ShieldT();
+    monster.equipped.protection = -27.5;
+    monster.equipped.primaryDecoratorType = ShieldDecorator.NONE;
+
+    const builder = new Builder();
+    Monster.finishMonsterBuffer(builder, monster.pack(builder));
+
+    const parser = new Parser(schema);
+    const table = Table.getRootTable(new ByteBuffer(builder.asUint8Array()));
+    const schemaObject = parser.toObject(table);
+
+    expect(schemaObject).toEqual({
+      equipped: {
+        protection: -27.5,
+        primary_decorator: undefined,
+        decorators: [],
+      },
+    });
+  });
   it("converts uint8 vectors to uint8arrays", () => {
     const builder = new Builder();
     const data = ByteVector.createDataVector(builder, [1, 2, 3]);
