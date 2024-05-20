@@ -1,11 +1,11 @@
 {
-  "name": "flatbuffers_reflection",
+  "name": "@foxglove/flatbuffers_reflection",
   "version": "1.0.1",
   "description": "Library for performing reflection on Flatbuffers in typescript",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jkuszmaul/flatbuffers_reflection.git"
+    "url": "git+https://github.com/foxglove/flatbuffers_reflection.git"
   },
   "author": "James Kuszmaul",
   "module": "dist/esm/index.js",
