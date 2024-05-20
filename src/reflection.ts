@@ -344,8 +344,6 @@ export class Parser {
         } else {
           throw new Error("Arrays may contain only scalar or struct fields");
         }
-      } else {
-        throw new Error("Unions are not supported in field " + field.name());
       }
     }
     return (t: Table) => {
