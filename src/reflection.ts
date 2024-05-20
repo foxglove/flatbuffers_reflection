@@ -247,7 +247,11 @@ export class Parser {
     const schema = this.getType(typeIndex);
     const numFields = schema.fieldsLength();
 
-    const fieldLambdas: { id: number; fieldName: string; readField: (t: Table) => unknown }[] = [];
+    const fieldLambdas: {
+      id: number;
+      fieldName: string;
+      readField: ((t: Table) => unknown) | undefined;
+    }[] = [];
     for (let i = 0; i < numFields; ++i) {
       const field = schema.fields(i);
       if (field === null) {
@@ -273,7 +277,7 @@ export class Parser {
       // Go through and attempt to use every single field accessor; return the
       // resulting object.
       for (const { fieldName, readField } of fieldLambdas) {
-        const value = readField(t);
+        const value = readField?.(t);
         if (value !== null) {
           obj[fieldName] = value;
         }
@@ -287,7 +291,7 @@ export class Parser {
     field: reflection.Field,
     typeIndex: number,
     readDefaults = false,
-  ): (t: Table) => unknown {
+  ): ((t: Table) => unknown) | undefined {
     const fieldType = field.type();
     if (fieldType === null) {
       throw new Error('Malformed schema: "type" field of Field not populated.');
@@ -368,6 +372,8 @@ export class Parser {
         throw new Error("Arrays may contain only scalar or struct fields");
       }
     }
+
+    return undefined;
   }
 
   // Parse a Table to a javascript object. This is can be used, e.g., to convert
