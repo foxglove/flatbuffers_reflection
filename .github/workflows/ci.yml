@@ -47,7 +47,7 @@ jobs:
       - run: yarn pack
       - name: Publish to NPM (dry run)
         # `yarn publish` does not support --provenance
-        run: npm publish flatbuffers_reflection-*.tgz --provenance --access public --dry-run
+        run: npm publish foxglove-flatbuffers_reflection-*.tgz --provenance --access public --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
       - name: Publish to NPM
@@ -61,6 +61,6 @@ jobs:
              exit 1
           fi
           # `yarn publish` does not support --provenance
-          npm publish flatbuffers_reflection-*.tgz --provenance --access public
+          npm publish foxglove-flatbuffers_reflection-*.tgz --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
