@@ -6,14 +6,17 @@ import { Parser, Table } from "./reflection";
 import {
   ArraysTable,
   ArraysTableT,
+  Color,
   Mat3x3bT,
   Mat3x3dT,
+  Mat3x3eT,
   Mat3x3fT,
   Mat3x3iT,
   Mat3x3lT,
   Mat3x3sT,
   Point3bT,
   Point3dT,
+  Point3eT,
   Point3fT,
   Point3iT,
   Point3lT,
@@ -379,10 +382,12 @@ describe("parseReflectionSchema", () => {
     const arraysTable = new ArraysTableT(
       [new Point3bT([1, 2, 3])],
       [new Point3sT([500, 501, 502])],
+      1,
       [new Point3iT([100_000, 100_001, 100_002])],
-      [new Point3lT([1_000_000n, 1_000_001n, 1_000_002n])],
+      [new Point3lT(0, [1_000_000n, 1_000_001n, 1_000_002n])],
       [new Point3fT([1.5, 2.5, 3.5])],
       [new Point3dT([1.1, 2.1, 3.1])],
+      [new Point3eT([Color.Red, Color.Green, Color.Blue])],
       new Mat3x3bT([
         new Point3bT([10, 11, 12]),
         new Point3bT([13, 14, 15]),
@@ -393,15 +398,16 @@ describe("parseReflectionSchema", () => {
         new Point3sT([23, 24, 25]),
         new Point3sT([26, 27, 28]),
       ]),
+      1,
       new Mat3x3iT([
         new Point3iT([30, 31, 32]),
         new Point3iT([33, 34, 35]),
         new Point3iT([36, 37, 38]),
       ]),
-      new Mat3x3lT([
-        new Point3lT([40n, 41n, 42n]),
-        new Point3lT([43n, 44n, 45n]),
-        new Point3lT([46n, 47n, 48n]),
+      new Mat3x3lT(1, [
+        new Point3lT(0, [40n, 41n, 42n]),
+        new Point3lT(0, [43n, 44n, 45n]),
+        new Point3lT(0, [46n, 47n, 48n]),
       ]),
       new Mat3x3fT([
         new Point3fT([1.5, 2.5, 3.5]),
@@ -413,6 +419,11 @@ describe("parseReflectionSchema", () => {
         new Point3dT([4.1, 5.1, 6.1]),
         new Point3dT([7.1, 8.1, 9.1]),
       ]),
+      new Mat3x3eT([
+        new Point3eT([Color.Red, Color.Green, Color.Blue]),
+        new Point3eT([Color.Green, Color.Red, Color.Blue]),
+        new Point3eT([Color.Green, Color.Blue, Color.Red]),
+      ]),
     );
 
     const builder = new Builder();
@@ -423,16 +434,20 @@ describe("parseReflectionSchema", () => {
     expect(parser.toObject(table)).toEqual({
       point3b_vec: arraysTable.point3bVec.map((p) => ({ ...p })),
       point3s_vec: arraysTable.point3sVec.map((p) => ({ ...p })),
+      pad1: 1,
       point3i_vec: arraysTable.point3iVec.map((p) => ({ ...p })),
       point3l_vec: arraysTable.point3lVec.map((p) => ({ ...p })),
       point3f_vec: arraysTable.point3fVec.map((p) => ({ ...p })),
       point3d_vec: arraysTable.point3dVec.map((p) => ({ ...p })),
+      point3e_vec: arraysTable.point3eVec.map((p) => ({ ...p })),
       mat3x3b: { cols: arraysTable.mat3x3b?.cols.map((p) => ({ ...p })) },
       mat3x3s: { cols: arraysTable.mat3x3s?.cols.map((p) => ({ ...p })) },
+      pad2: 1,
       mat3x3i: { cols: arraysTable.mat3x3i?.cols.map((p) => ({ ...p })) },
-      mat3x3l: { cols: arraysTable.mat3x3l?.cols.map((p) => ({ ...p })) },
+      mat3x3l: { pad1: 1, cols: arraysTable.mat3x3l?.cols.map((p) => ({ ...p })) },
       mat3x3f: { cols: arraysTable.mat3x3f?.cols.map((p) => ({ ...p })) },
       mat3x3d: { cols: arraysTable.mat3x3d?.cols.map((p) => ({ ...p })) },
+      mat3x3e: { cols: arraysTable.mat3x3e?.cols.map((p) => ({ ...p })) },
     });
   });
 });
