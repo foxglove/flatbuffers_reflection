@@ -373,7 +373,9 @@ export class Parser {
       }
     }
 
-    return undefined;
+    throw new Error(
+      `Unsupported BaseType ${reflection.BaseType[baseType as number] ?? "unknown"} (${baseType})`,
+    );
   }
 
   // Parse a Table to a javascript object. This is can be used, e.g., to convert
@@ -745,7 +747,7 @@ export class Parser {
     field: reflection.Field,
     discriminatorField: reflection.Field,
     readDefaults: boolean,
-  ): (table: Table) => Record<string, any>[] {
+  ): (table: Table) => (Record<string, any> | undefined)[] {
     const fieldType = field.type();
     if (fieldType === null) {
       throw new Error(`Malformed schema: "type" field of '${field.name()}' not populated.`);
@@ -793,8 +795,10 @@ export class Parser {
           );
         }
 
-        // Skip NONE
-        if (discriminator < 0) {
+        // NONE becomes an undefined slot in the array because the values array is should match the
+        // discriminators length
+        if (discriminator <= 0) {
+          result.push(undefined);
           continue;
         }
 
@@ -857,7 +861,7 @@ export class Parser {
       }
 
       // Skip NONE
-      if (discriminatorValue < 0) {
+      if (discriminatorValue <= 0) {
         return undefined;
       }
 
