@@ -275,9 +275,8 @@ export class Parser {
       // resulting object.
       for (const { fieldName, readField } of fieldLambdas) {
         const value = readField?.(t);
-        // use typeof comparison so we do NOT filter out `null`
-        // - `undefined` continues to mean "absent" and is filtered
-        // - `null` is preserved on the resulting object
+        // Use typeof so we don't filter out `null`.
+        // `undefined` means "absent" and is filtered; `null` is preserved as a valid value.
         if (typeof value !== "undefined") {
           obj[fieldName] = value;
         }
