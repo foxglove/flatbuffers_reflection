@@ -465,9 +465,8 @@ export class Parser {
     return (t: Table) => {
       const offset = t.offset + t.bb.__offset(t.offset, field.offset());
       if (offset === t.offset) {
-        // If the field is marked as 'optional' in the schema, return `null` when it is absent.
-        // This applies even when readDefaults === true; optional scalars should not fall back
-        // to their numeric default values when missing.
+        // If the field is marked as 'optional' in the schema (i.e., its default is `null`),
+        // return `null` when the field is absent. This preserves FlatBuffers' optional-scalar semantics.
         if (typeof field.optional === "function" && field.optional()) {
           return null;
         }
