@@ -551,15 +551,16 @@ describe("parseReflectionSchema", () => {
     const table = Table.getRootTable(fbBuffer);
 
     const schemaObjectWithoutDefaults = parser.toObject(table, false /* read defaults */);
+
     expect(schemaObjectWithoutDefaults).toEqual({
       regular_field: undefined,
-      optional_field: null,
+      optional_field: undefined,
     });
 
     const schemaObjectWithDefaults = parser.toObject(table, true /* read defaults */);
     expect(schemaObjectWithDefaults).toEqual({
       regular_field: 0,
-      optional_field: null,
+      optional_field: undefined,
     });
   });
 });
