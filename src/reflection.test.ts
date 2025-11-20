@@ -563,4 +563,26 @@ describe("parseReflectionSchema", () => {
       optional_field: null,
     });
   });
+
+  it("yields the appropriate value for an optional field when set", () => {
+    const schema = Schema.getRootAsSchema(
+      new ByteBuffer(readFileSync(`${__dirname}/test/gen/OptionalScalar.bfbs`)),
+    );
+    const parser = new Parser(schema);
+
+    const optionalScalar = new OptionalScalarT(10, 42);
+
+    const builder = new Builder();
+    OptionalScalar.finishOptionalScalarBuffer(builder, optionalScalar.pack(builder));
+    const fbBuffer = new ByteBuffer(builder.asUint8Array());
+
+    const table = Table.getRootTable(fbBuffer);
+
+    const schemaObjectWithoutDefaults = parser.toObject(table, true);
+
+    expect(schemaObjectWithoutDefaults).toEqual({
+      regular_field: 10,
+      optional_field: 42,
+    });
+  });
 });
