@@ -554,13 +554,13 @@ describe("parseReflectionSchema", () => {
 
     expect(schemaObjectWithoutDefaults).toEqual({
       regular_field: undefined,
-      optional_field: undefined,
+      optional_field: null,
     });
 
     const schemaObjectWithDefaults = parser.toObject(table, true /* read defaults */);
     expect(schemaObjectWithDefaults).toEqual({
       regular_field: 0,
-      optional_field: undefined,
+      optional_field: null,
     });
   });
 });
