@@ -449,22 +449,25 @@ export class Parser {
     if (fieldType == null) {
       throw new Error('Malformed schema: "type" field of Field not populated.');
     }
+
+    const fieldBaseType = fieldType.baseType();
     const isStruct = this.getType(typeIndex).isStruct();
-    if (!isScalar(fieldType.baseType())) {
+    if (!isScalar(fieldBaseType)) {
       throw new Error("Field " + field.name() + " is not a scalar type.");
     }
 
+    const fieldOffset = field.offset();
+
     if (isStruct) {
-      const baseType = fieldType.baseType();
       return (t: Table) => {
-        return t.readScalar(baseType, t.offset + field.offset());
+        return t.readScalar(fieldBaseType, t.offset + fieldOffset);
       };
     }
 
     const isOptional = field.optional();
 
     return (t: Table) => {
-      const offset = t.offset + t.bb.__offset(t.offset, field.offset());
+      const offset = t.offset + t.bb.__offset(t.offset, fieldOffset);
       if (offset === t.offset) {
         // If the field is marked as 'optional' in the schema (i.e., its default is `null`),
         // return `null` when the field is absent. This preserves FlatBuffers' optional-scalar semantics.
@@ -475,7 +478,7 @@ export class Parser {
         if (!readDefaults) {
           return undefined;
         }
-        switch (fieldType.baseType()) {
+        switch (fieldBaseType) {
           case reflection.BaseType.Bool:
             return field.defaultInteger() !== 0n;
           case reflection.BaseType.Long:
@@ -493,7 +496,7 @@ export class Parser {
           case reflection.BaseType.Double:
             return field.defaultReal();
           default:
-            throw new Error(`Expected scalar type, found ${fieldType.baseType()}`);
+            throw new Error(`Expected scalar type, found ${fieldBaseType}`);
         }
       }
       return t.readScalar(fieldType.baseType(), offset);
