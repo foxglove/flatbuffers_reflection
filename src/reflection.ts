@@ -331,11 +331,12 @@ export class Table {
 export class Parser {
   constructor(private readonly schema: reflection.Schema) {}
 
-  readonly #objectReaders = new Map<number, (table: Table) => Record<string, any>>();
+  // eslint-disable-next-line @foxglove/prefer-hash-private -- Avoid emitting a runtime tslib dependency.
+  private readonly objectReaders = new Map<number, (table: Table) => Record<string, any>>();
 
   toObjectLambda(typeIndex: number, readDefaults = false): (t: Table) => Record<string, any> {
     const key = typeIndex * 2 + (readDefaults ? 1 : 0);
-    const cached = this.#objectReaders.get(key);
+    const cached = this.objectReaders.get(key);
     if (cached) {
       return cached;
     }
@@ -346,19 +347,20 @@ export class Parser {
       }
       return reader(table);
     };
-    this.#objectReaders.set(key, forward);
+    this.objectReaders.set(key, forward);
     try {
-      reader = this.#compileObjectReader(typeIndex, readDefaults);
-      this.#objectReaders.set(key, reader);
+      reader = this.compileObjectReader(typeIndex, readDefaults);
+      this.objectReaders.set(key, reader);
       return reader;
     } catch (error) {
       // Nested readers may capture the incomplete placeholder. Discard the entire cache.
-      this.#objectReaders.clear();
+      this.objectReaders.clear();
       throw error;
     }
   }
 
-  #compileObjectReader(
+  // eslint-disable-next-line @foxglove/prefer-hash-private -- Avoid emitting a runtime tslib dependency.
+  private compileObjectReader(
     typeIndex: number,
     readDefaults: boolean,
   ): (t: Table) => Record<string, any> {
