@@ -35,7 +35,17 @@ import { ShieldDecorator } from "./test/gen/shield-decorator";
 import { SkullT } from "./test/gen/skull";
 import { StructBT } from "./test/gen/struct-b";
 import { UnionStruct, UnionStructT } from "./test/gen/union-struct";
-import { BaseType, EnumVal, Field, Schema, Type } from "./vendor/gen/reflection";
+import {
+  BaseType,
+  EnumVal,
+  Field,
+  FieldT,
+  Schema,
+  SchemaT,
+  Type,
+  TypeT,
+} from "./vendor/gen/reflection";
+import { Object_T } from "./vendor/gen/reflection/object";
 
 describe("parseReflectionSchema", () => {
   it("Reads reflection table", () => {
@@ -585,4 +595,211 @@ describe("parseReflectionSchema", () => {
       optional_field: 42,
     });
   });
+});
+
+function makeParser(fields: FieldT[]): Parser {
+  const root = new Object_T("Root", fields);
+  const builder = new Builder();
+  builder.finish(new SchemaT([root], [], null, null, root).pack(builder));
+  return new Parser(Schema.getRootAsSchema(new ByteBuffer(builder.asUint8Array())));
+}
+
+describe("compiled readers", () => {
+  it("caches readers separately for each default mode and supports recursive tables", () => {
+    const parser = makeParser([
+      new FieldT("next", new TypeT(BaseType.Obj, BaseType.None, 0), 0, 4),
+      new FieldT("value", new TypeT(BaseType.Int), 1, 6),
+    ]);
+    const decode = parser.toObjectLambda(-1);
+    expect(parser.toObjectLambda(-1)).toBe(decode);
+    const withDefaults = parser.toObjectLambda(-1, true);
+    expect(withDefaults).not.toBe(decode);
+    expect(parser.toObjectLambda(-1, true)).toBe(withDefaults);
+    const builder = new Builder();
+    builder.startObject(2);
+    const child = builder.endObject();
+    builder.startObject(2);
+    builder.addFieldOffset(0, child, 0);
+    builder.addFieldInt32(1, 42, 0);
+    builder.finish(builder.endObject());
+    const table = Table.getRootTable(new ByteBuffer(builder.asUint8Array()));
+    expect(decode(table)).toEqual({ next: {}, value: 42 });
+    expect(withDefaults(table)).toEqual({ next: { value: 0 }, value: 42 });
+    expect(parser.toObject(table)).toEqual(decode(table));
+  });
+
+  it("does not retain incomplete readers after a schema compilation error", () => {
+    const parser = makeParser([
+      new FieldT("next", new TypeT(BaseType.Obj, BaseType.None, 0), 0, 4),
+      new FieldT("unsupported", new TypeT(BaseType.Vector64), 1, 6),
+    ]);
+    expect(() => parser.toObjectLambda(-1)).toThrow("Unsupported BaseType");
+    expect(() => parser.toObjectLambda(-1)).toThrow("Unsupported BaseType");
+    expect(() => parser.toObjectLambda(0)).toThrow("Unsupported BaseType");
+  });
+
+  it("advances over NONE entries before populated union vector entries", () => {
+    const schema = Schema.getRootAsSchema(
+      new ByteBuffer(readFileSync(`${__dirname}/test/gen/Union.bfbs`)),
+    );
+    const shield = new ShieldT();
+    shield.decoratorsType = [
+      ShieldDecorator.NONE,
+      ShieldDecorator.Skull,
+      ShieldDecorator.NONE,
+      ShieldDecorator.Arms,
+    ];
+    shield.decorators = [new GemstoneT(1), new SkullT("skull"), new GemstoneT(2), new ArmsT(12)];
+    const builder = new Builder();
+    builder.finish(shield.pack(builder));
+    const parser = new Parser(schema);
+    const table = Table.getNamedTable(new ByteBuffer(builder.asUint8Array()), schema, "Shield");
+    expect(parser.toObject(table).decorators).toEqual([
+      undefined,
+      { name: "skull" },
+      undefined,
+      { count: 12 },
+    ]);
+  });
+});
+
+describe("scalar vector readers", () => {
+  const cases = [
+    {
+      type: BaseType.Bool,
+      size: 1,
+      values: [false, true],
+      // eslint-disable-next-line @foxglove/no-boolean-parameters -- Writes boolean data, not an option.
+      write: (view: DataView, offset: number, isSet: boolean) => {
+        view.setUint8(offset, Number(isSet));
+      },
+    },
+    {
+      type: BaseType.Byte,
+      size: 1,
+      values: [-128, 0, 127],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setInt8(offset, value);
+      },
+    },
+    {
+      type: BaseType.UType,
+      size: 1,
+      values: [0, 127, 255],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setUint8(offset, value);
+      },
+    },
+    {
+      type: BaseType.UByte,
+      size: 1,
+      values: [0, 127, 255],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setUint8(offset, value);
+      },
+    },
+    {
+      type: BaseType.Short,
+      size: 2,
+      values: [-32768, 0, 32767],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setInt16(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.UShort,
+      size: 2,
+      values: [0, 65535],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setUint16(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.Int,
+      size: 4,
+      values: [-2147483648, 0, 2147483647],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setInt32(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.UInt,
+      size: 4,
+      values: [0, 4294967295],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setUint32(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.Long,
+      size: 8,
+      values: [-9223372036854775808n, 0n, 9223372036854775807n],
+      write: (view: DataView, offset: number, value: bigint) => {
+        view.setBigInt64(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.ULong,
+      size: 8,
+      values: [0n, 18446744073709551615n],
+      write: (view: DataView, offset: number, value: bigint) => {
+        view.setBigUint64(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.Float,
+      size: 4,
+      values: [-0, 1.5, -Infinity, Infinity, NaN],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setFloat32(offset, value, true);
+      },
+    },
+    {
+      type: BaseType.Double,
+      size: 8,
+      values: [-0, 1.1, -Infinity, Infinity, NaN],
+      write: (view: DataView, offset: number, value: number) => {
+        view.setFloat64(offset, value, true);
+      },
+    },
+  ];
+  it.each(cases)(
+    "decodes type $type at unaligned backing-buffer offsets",
+    ({ type, size, values, write }) => {
+      const parser = makeParser([new FieldT("values", new TypeT(BaseType.Vector, type), 0, 4)]);
+      const decode = parser.toObjectLambda(-1);
+      // Manually lay out a root table and its scalar vector. Align relative to the message,
+      // while deliberately leaving the message unaligned in its larger backing buffer.
+      const bytes = new Uint8Array(new ArrayBuffer(128), 3, 24 + size * values.length);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      view.setUint32(0, 12, true);
+      view.setUint16(4, 6, true);
+      view.setUint16(6, 8, true);
+      view.setUint16(8, 4, true);
+      view.setInt32(12, 8, true);
+      view.setUint32(16, 4, true);
+      view.setUint32(20, values.length, true);
+      for (let i = 0; i < values.length; i++) {
+        // The discriminated test cases couple each values array with its matching writer.
+        (write as (view: DataView, offset: number, value: number | bigint | boolean) => void)(
+          view,
+          24 + size * i,
+          values[i]!,
+        );
+      }
+      const table = Table.getRootTable(new ByteBuffer(bytes));
+      const expected = type === BaseType.UByte ? Uint8Array.from(values as number[]) : values;
+      expect(decode(table).values).toEqual(expected);
+      expect(decode(table).values.buffer).toBe(type === BaseType.UByte ? bytes.buffer : undefined);
+      // A larger backing allocation must not allow reads past this message's view.
+      view.setUint32(20, values.length + 1, true);
+      expect(() => decode(table)).toThrow("Scalar range");
+      view.setInt32(20, -1, true);
+      expect(() => decode(table)).toThrow("Scalar range");
+      view.setUint32(20, 0, true);
+      expect(decode(table).values).toEqual(type === BaseType.UByte ? new Uint8Array() : []);
+      view.setUint16(8, 0, true);
+      expect(decode(table)).toEqual({});
+    },
+  );
 });
